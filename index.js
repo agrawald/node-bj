@@ -2,9 +2,15 @@ const express = require('express');
 const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server);
+const ExpressPeerServer = require('peer').ExpressPeerServer;
+
 const Monitor = require('./server/monitor');
 const monitor = new Monitor();
+const options = {
+    debug: true
+};
 
+app.use('/peerjs', ExpressPeerServer(server, options));
 app.use(express.static(__dirname + '/node_modules'));
 
 app.get('/', function(req, res,next) {
@@ -21,9 +27,23 @@ io.on('connection', function (socket) {
     socket.on('disconnect', function() {
         monitor.removePlayer(this.id);
     });
-    socket.on('ELECTION', monitor.election);
-    socket.on('HIT', monitor.hit);
-    socket.on('STAND', monitor.stand);
+    socket.on('START_GAME', function (data) {
+        monitor.startGame(data);
+    });
+    socket.on('HIT', function(data) {
+        monitor.hit(data);
+    });
+    socket.on('STAND', function(data) {
+        monitor.stand(data);
+    });
 });
+
+server.on('connection', function (id) {
+    console.log(`Peer is connected ${id}`);
+});
+server.on('disconnect', function (id) {
+    console.log(`Peer is disconnected ${id}`);
+});
+
 
 server.listen(3000);

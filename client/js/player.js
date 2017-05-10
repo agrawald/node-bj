@@ -1,5 +1,5 @@
 class Player {
-    constructor(that) {
+    constructor(that, _myId) {
         this.id = that.id;
         this.name = that.name;
         this.cards = [];
@@ -8,12 +8,14 @@ class Player {
         }
         this.score = that.score;
         this.isBusted = that.isBusted;
+        this.isMe = _myId === that.id;
+        this.isDealer = that.isDealer;
     }
 
     render() {
-        console.log(`... rendering players ${this.id}`);
+        console.log(`... rendering player ${this.id}`);
         let playerTemplate = document.getElementById('playerTemplate').innerHTML;
-        document.getElementById('players').innerHTML += Mustache.render(playerTemplate, this);
+        $('#players').append(Mustache.render(playerTemplate, this));
         this.display();
     }
 

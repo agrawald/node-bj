@@ -16,13 +16,7 @@ module.exports = class Card {
         return this.rank;
     }
 
-    toJSON(mask) {
-        if(mask) {
-            return {
-                suit: 'C',
-                rank: 'B'
-            }
-        }
+    toJSON() {
         return {
             suit: this.suit,
             rank: this.rank

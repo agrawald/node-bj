@@ -21,6 +21,11 @@
             <small>Multiplayer</small>
         </h3>
     </div>
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
     <div class="row text-center" id="players">
         <!-- Here goes all the players -->
     </div>
@@ -42,12 +47,14 @@
             <div class="panel-body">
                 <canvas height="150" id="{{id}}-canvas"></canvas>
             </div>
+            {{#isMe}}
             <div class="panel-footer text-center">
                 <div class="btn-group" role="group" aria-label="...">
-                    <button id="hit" type="button" class="btn btn-default">Hit</button>
-                    <button id="stand" type="button" class="btn btn-default">Stand</button>
+                    <button id="hit{{id}}" type="button" class="btn btn-default" onclick="action('HIT')">Hit</button>
+                    <button id="stand{{id}}" type="button" class="btn btn-default" onclick="action('STAND')">Stand</button>
                 </div>
             </div>
+            {{/isMe}}
         </div>
     </div>
 </script>
@@ -59,6 +66,7 @@
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
         integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
         crossorigin="anonymous"></script>
+<script src="http://cdn.peerjs.com/0.3/peer.js"></script>
 <script type="text/javascript" src="js/card.js"></script>
 <script type="text/javascript" src="js/player.js"></script>
 <script type="text/javascript" src="js/client.js"></script>

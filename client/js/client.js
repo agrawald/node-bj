@@ -1,6 +1,12 @@
 'use strict';
 
 const socket = io();
+const peer = new Peer(socket.id, {host: 'localhost', port: 3000, path: '/peerjs'});
+
+let anyBiggerNodeAlive = false;
+let neighbours = [];
+let isDealer = true;
+let currentDealerId = null;
 
 socket.on('NEW_PLAYER', addPlayer);
 socket.on('REMOVE_PLAYER', removePlayer);
@@ -10,19 +16,22 @@ socket.on('WAIT', waitAndAskAgain);
 socket.on('HIT', processAction);
 socket.on('STAND', processAction);
 
-let me = null;
+function action(button) {
+    console.log(`${button} clicked`);
+    socket.emit(button, socket.id);
+}
 
 function addPlayer(player) {
     console.log(`NEW_PLAYER: ${player}`);
-    new Player(JSON.parse(player));
-    if (player.id === socket.id) {
-        me = JSON.parse(player);
-    }
+    new Player(JSON.parse(player), socket.id);
 }
 
 function removePlayer(playerId) {
     console.log(`REMOVE_PLAYER: ${playerId}`);
-    document.getElementById(JSON.parse(playerId)).remove();
+    let playerDiv = document.getElementById(JSON.parse(playerId))
+    if (playerDiv) {
+        playerDiv.remove();
+    }
 }
 
 function startGame(players) {
@@ -32,8 +41,8 @@ function startGame(players) {
 
 function election(data) {
     console.log(`ELECTION: ${data}`);
-    //TODO if i am bigger send and start election again
-    //else keep quite
+    neighbours = data.peers;
+    sendElectionMessage();
 }
 
 function renderPlayers(players) {
@@ -44,16 +53,20 @@ function renderPlayers(players) {
 }
 
 
-function waitAndAskAgain() {
+function waitAndAskAgain(data) {
     console.log("WAIT: will wait and ask again");
-    //TODO
+    showNotification(data);
+}
+
+function showNotification(message) {
+    alert(message);
 }
 
 function fromJSON(players) {
     const _players = JSON.parse(players);
     const _oPlayers = [];
     for (let i = 0; i < _players.length; i++) {
-        _oPlayers.push(new Player(_players[i]))
+        _oPlayers.push(new Player(_players[i], socket.id))
     }
     return _oPlayers;
 }
@@ -61,20 +74,66 @@ function fromJSON(players) {
 function processAction(player) {
     console.log("HIT/STAND response ... ");
     const _player = JSON.parse(player);
-    delete document.getElementById(_player.id);
-    new Player(_player).render();
+    $(`#${_player.id}`).remove();
+    new Player(_player, socket.id).render();
 }
 
-function registerActions() {
-    $('#hit').onclick = function () {
-        console.log("HIT clicked")
-        socket.emit('HIT', JSON.stringify(me));
-    };
-
-    $('#stand').onclick = function () {
-        console.log("STAND clicked")
-        socket.emit('STAND', JSON.stringify(me));
-    };
+function findPeersWithHigherIds() {
+    return neighbours.filter(function (peer) {
+        return socket.id < peer;
+    });
 }
 
-registerActions();
+function sendElectionMessage() {
+    anyBiggerNodeAlive = false;
+    let peersWithHigherIds = findPeersWithHigherIds();
+
+    peersWithHigherIds.forEach((_peer) => {
+        peer.connect(_peer, function (conn) {
+            conn.send('ELECTION', peer.id);
+        });
+    });
+    setTimeout(() => {
+        if (anyBiggerNodeAlive === false) {
+            console.log(`i am the king!`.toUpperCase());
+            isDealer = true;
+            currentDealerId = socket.id;
+            neighbours.forEach((_peer) => {
+                peer.connect(_peer, function (conn) {
+                    conn.send('COORDINATOR', socket.id);
+                });
+                socket.emit('START_GAME', socket.id);
+            });
+        }
+    }, 1000 * neighbours.length - 1);
+}
+
+peer.on('ELECTION', function (id) {
+    console.log(`${socket.id} got ELECTION...${id}`);
+    peer.connect(id, function (conn) {
+        conn.send('ANSWER', socket.id);
+    });
+});
+
+peer.on('ANSWER', function (id) {
+    console.log(`${socket.id} got ANSWER...${id}`);
+    isDealer = false;
+    anyBiggerNodeAlive = true;
+});
+
+peer.on('COORDINATOR', function (id) {
+    console.log(`${socket.id} got COORDINATOR...${id}`);
+    if (data < socket.id) {
+        if (socket.id === currentDealerId) {
+            console.log(`hey ${id}, my nodes are loyal to me!`.toUpperCase());
+        } else {
+            console.log(`so, yeah... thats akward ${id}, I'm gonna go ahead and start a new election`.toUpperCase());
+        }
+        sendElectionMessage();
+    } else {
+        currentDealerId = id;
+        isDealer = false;
+        anyBiggerNodeAlive = true;
+        console.log(`long live node ${id}!`.toUpperCase());
+    }
+});

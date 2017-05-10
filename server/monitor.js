@@ -12,13 +12,33 @@ module.exports = class Monitor {
     addPlayer(socket) {
         let player = new Player(socket);
         this.players.push(player);
-        if (this.players.length >= 2 && !this.game.inProgress) {
-            this.game.start(this.players);
-            this.broadcast('START_GAME', this.players);
-        } else {
+
+        if(this.players.length < 2) {
+            console.error("... need more players to start a game");
+            socket.emit('WAIT', 'Need more players to start a game....');
+        } else if(this.game.inProgress) {
             console.log("... new player wanted to play, but game in progress")
-            socket.emit('WAIT', 'TODO');
+            socket.emit('WAIT', 'Game in progress....');
+        } else {
+            let i = Math.floor(Math.random() * this.players.length);
+            let peers = this.players.map(function (player) {
+                return player.socket.id;
+            });
+            this.players[i].socket.emit('ELECTION', {
+                peers: peers,
+                player: this.players[i]
+            });
         }
+    }
+
+    startGame(data) {
+        console.log("Dealer identified starting the game");
+        this.players.forEach(function (player) {
+            player.isDealer = (player.socket.id === data)
+            player.currentDealerId = data;
+        });
+        this.game.start(this.players);
+        this.broadcast('START_GAME', this.players);
     }
 
     removePlayer(playerId) {
@@ -30,20 +50,28 @@ module.exports = class Monitor {
                 }
             });
             this.broadcast('REMOVE_PLAYER', playerId);
-            if (this.players.length <= 0) {
+            if (this.players.length <= 1) {
+                console.log("... less that one player");
+                if (this.players.length === 1) {
+                    console.log("... only one player left, he is the winner");
+                    this.players[0].socket.emit('WINNER', JSON.stringify(this.players[0]));
+                }
                 this.game.stop();
+            } else {
+                console.log("Starting a LEADER ELECTION");
+                this.broadcast('')
             }
         } else {
-            console.log(`... no players left`)
+            console.log(`... no players left`);
             if (this.game.inProgress) {
                 this.game.stop();
             }
         }
     }
 
-    findPlayer(that) {
+    findPlayerById(id) {
         return this.players.find(function (player) {
-            return player.socket.id === that.id;
+            return player.socket.id === id;
         })
     }
 
@@ -63,10 +91,9 @@ module.exports = class Monitor {
     hit(data) {
         if (this.game && this.game.inProgress) {
             console.log(`HIT: ${data}`);
-            const player = JSON.parse(data);
-            const _oPlayer = this.findPlayer(player);
+            const _oPlayer = this.findPlayerById(data);
             _oPlayer.addCard(this.game.deck.nextCard());
-            this.broadcast('HIT', JSON.stringify(_oPlayer));
+            this.broadcast('HIT', _oPlayer);
         }
     }
 
@@ -77,7 +104,7 @@ module.exports = class Monitor {
             while (_oDealer.score() < 17) {
                 _oDealer.addCard(this.game.deck.nextCard());
             }
-            this.broadcast('STAND', JSON.stringify(_oDealer));
+            this.broadcast('STAND', _oDealer);
         }
     }
 
@@ -99,11 +126,4 @@ module.exports = class Monitor {
         }
         _oPlayer.won = false;
     }
-
-
-    election(socket) {
-        console.log(`ELECTION started by ${socket.id}`)
-        this.broadcast('ELECTION', 'TODO');
-    }
-}
-;
+};
