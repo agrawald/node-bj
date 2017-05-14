@@ -10,6 +10,8 @@ class Player {
         this.isBusted = that.isBusted;
         this.isMe = _myId === that.id;
         this.isDealer = that.isDealer;
+        this.won = that.won;
+        this.myTurn = that.myTurn;
     }
 
     render() {

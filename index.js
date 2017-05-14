@@ -36,6 +36,9 @@ io.on('connection', function (socket) {
     socket.on('STAND', function(data) {
         monitor.stand(data);
     });
+    socket.on('DEALER', function(data) {
+        monitor.dealerNominated(data);
+    });
 });
 
 server.on('connection', function (id) {

@@ -21,18 +21,13 @@
             <small>Multiplayer</small>
         </h3>
     </div>
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-        </button>
+    <div><h2 id="role"></h2></div>
+    <div class="form-group">
+        <label for="result">LOGS:</label>
+        <textarea class="form-control" rows="5" id="result"></textarea>
     </div>
     <div class="row text-center" id="players">
         <!-- Here goes all the players -->
-    </div>
-    <div class="alert alert-success" role="alert" aria-hidden="true" hidden>
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span
-                aria-hidden="true">&times;</span></button>
-        <strong id="result"></strong>
     </div>
 </div>
 
@@ -47,14 +42,16 @@
             <div class="panel-body">
                 <canvas height="150" id="{{id}}-canvas"></canvas>
             </div>
+            {{^isDealer}}
             {{#isMe}}
             <div class="panel-footer text-center">
-                <div class="btn-group" role="group" aria-label="...">
+                <div class="btn-group" role="group" aria-label="..." id="actions-{{id}}">
                     <button id="hit{{id}}" type="button" class="btn btn-default" onclick="action('HIT')">Hit</button>
                     <button id="stand{{id}}" type="button" class="btn btn-default" onclick="action('STAND')">Stand</button>
                 </div>
             </div>
             {{/isMe}}
+            {{/isDealer}}
         </div>
     </div>
 </script>

@@ -62,7 +62,8 @@ module.exports = class Player {
             score: this.score(),
             isBusted: this.isBusted(),
             myTurn: this.myTurn,
-            isDealer: this.isDealer
+            isDealer: this.isDealer,
+            won: this.won
         }
     }
 };

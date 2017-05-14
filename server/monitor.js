@@ -7,19 +7,38 @@ module.exports = class Monitor {
     constructor() {
         this.players = [];
         this.game = new Game();
+        this.turn = null;
+    }
+
+    dealerNominated(dealerId) {
+        let id = dealerId;
+        for(let i=0; i<this.players.length; i++) {
+            let player = this.players[i];
+            if(id === player.socket.id) {
+                player.isDealer = true;
+                if(player.socket.id === this.turn) {
+                    let nextIdx = this.nextTurn(i);
+                    this.players[nextIdx].myTurn = true;
+                    this.turn = this.players[nextIdx];
+                }
+                break;
+            }
+        }
+        this.broadcast('UPDATE_PLAYERS', this.players);
+        this.broadcast("TURN", this.turn);
     }
 
     addPlayer(socket) {
         let player = new Player(socket);
         this.players.push(player);
 
-        if(this.players.length < 2) {
+        if (this.players.length < 3) {
             console.error("... need more players to start a game");
             socket.emit('WAIT', {
                 msg: 'Need more players to start a game....',
                 existingPlayers: this.players
             });
-        } else if(this.game.inProgress) {
+        } else if (this.game.inProgress) {
             console.log("... new player wanted to play, but game in progress")
             socket.emit('WAIT', {
                 msg: 'game in progress',
@@ -28,7 +47,10 @@ module.exports = class Monitor {
         } else {
             this.players[0].isDealer = true;
             this.game.start(this.players);
+            this.players[1].myTurn = true;
+            this.turn = this.players[1].socket.id;
             this.broadcast("START_GAME", this.players);
+            this.broadcast("TURN", this.players[1].socket.id);
         }
     }
 
@@ -44,23 +66,21 @@ module.exports = class Monitor {
 
     removePlayer(playerId) {
         if (this.players) {
-            let _this = this;
-            this.players.forEach(function (player, idx) {
+            for (let i = 0; i < this.players.length; i++) {
+                let player = this.players[i];
                 if (player.socket.id === playerId) {
-                    _this.players.splice(idx, 1);
+                    this.players.splice(i, 1);
+                    this.broadcast('REMOVE_PLAYER', playerId);
+                    if (this.players.length <= 1) {
+                        console.log("... less that one player");
+                        if (this.players.length === 1) {
+                            console.log("... only one player left, he is the winner");
+                            this.broadcast('WINNER', this.players[0].socket.id);
+                        }
+                        this.game.stop();
+                    }
+                    break;
                 }
-            });
-            this.broadcast('REMOVE_PLAYER', playerId);
-            if (this.players.length <= 1) {
-                console.log("... less that one player");
-                if (this.players.length === 1) {
-                    console.log("... only one player left, he is the winner");
-                    this.players[0].socket.emit('WINNER', JSON.stringify(this.players[0]));
-                }
-                this.game.stop();
-            } else {
-                console.log("Starting a LEADER ELECTION");
-                this.broadcast('')
             }
         } else {
             console.log(`... no players left`);
@@ -70,21 +90,25 @@ module.exports = class Monitor {
         }
     }
 
-    findPlayerById(id) {
-        return this.players.find(function (player) {
-            return player.socket.id === id;
-        })
+    findDealer() {
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i].isDealer) {
+                return this.players[i];
+            }
+        }
     }
 
-    findDealer() {
-        return this.players.find(function (player) {
-            return player.isDealer;
-        })
+    findPlayer(id) {
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i].socket.id === id) {
+                return this.players[i];
+            }
+        }
     }
 
     broadcast(type, message) {
         console.log(`BROADCAST: ${type} -> ${message}`);
-        for(let i=0; i<this.players.length; i++) {
+        for (let i = 0; i < this.players.length; i++) {
             this.players[i].socket.emit(type, JSON.stringify(message));
         }
     }
@@ -92,10 +116,38 @@ module.exports = class Monitor {
     hit(data) {
         if (this.game && this.game.inProgress) {
             console.log(`HIT: ${data}`);
-            const _oPlayer = this.findPlayerById(data);
-            _oPlayer.addCard(this.game.deck.nextCard());
-            this.broadcast('HIT', _oPlayer);
+            for (let i = 0; i < this.players.length; i++) {
+                if (data === this.players[i].socket.id) {
+                    let _oPlayer = this.players[i];
+                    _oPlayer.addCard(this.game.deck.nextCard());
+                    //broadcast HIT result
+                    this.broadcast('HIT', _oPlayer);
+                    let turnIdx = this.nextTurn(i);
+                    this.players[turnIdx].myTurn = true;
+                    this.turn = this.players[turnIdx].socket.id;
+                    this.broadcast("TURN", this.players[turnIdx].socket.id);
+                    //identify winner
+                    if (_oPlayer.isBusted()) {
+                        this.broadcast('BUSTED', _oPlayer.socket.id);
+                        this.removePlayer(_oPlayer.socket.id);
+                    }
+
+                    break;
+                }
+            }
         }
+    }
+
+    nextTurn(i) {
+        let nextTurn = i + 1;
+        if (nextTurn >= this.players.length) {
+            nextTurn = 0;
+        }
+        if (this.players[nextTurn].isDealer) {
+            nextTurn += 1;
+        }
+
+        return nextTurn;
     }
 
     stand(data) {
@@ -105,26 +157,29 @@ module.exports = class Monitor {
             while (_oDealer.score() < 17) {
                 _oDealer.addCard(this.game.deck.nextCard());
             }
+            //broadcast stand
             this.broadcast('STAND', _oDealer);
+            //change the turn
+            for (let i = 0; i < this.players.length; i++) {
+                if (data === this.players[i].socket.id) {
+                    let turnIdx = this.nextTurn(i);
+                    this.players[turnIdx].myTurn = true;
+                    this.turn = this.players[turnIdx].socket.id;
+                    this.broadcast("TURN", this.players[turnIdx].socket.id);
+                    break;
+                }
+            }
+            //identify winner
+            let player = this.findPlayer(data);
+            if (player.isBusted()) {
+                this.broadcast('BUSTED', player.socket.id);
+                this.removePlayer(player.socket.id);
+            } else if (_oDealer.isBusted()) {
+                this.broadcast('WINNER', player.socket.id);
+                this.removePlayer(player.socket.id);
+                _oDealer.CARDS = [];
+                _oDealer.addCard(this.game.deck.nextCard());
+            }
         }
-    }
-
-    //FIXME HERE
-    result(_oPlayer, _oDealer) {
-        const playerScore = _oPlayer.score();
-        const dealerScore = _oDealer.score();
-
-        if (_oPlayer.isBusted()) {
-            _oPlayer.won = false;
-        } else if (_oDealer.isBusted()) {
-            _oPlayer.won = true;
-        }
-
-        if (playerScore > dealerScore) {
-            _oPlayer.won = true;
-        } else if (playerScore === dealerScore) {
-            _oPlayer.push = true;
-        }
-        _oPlayer.won = false;
     }
 };
