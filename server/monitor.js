@@ -15,19 +15,20 @@ module.exports = class Monitor {
 
         if(this.players.length < 2) {
             console.error("... need more players to start a game");
-            socket.emit('WAIT', 'Need more players to start a game....');
+            socket.emit('WAIT', {
+                msg: 'Need more players to start a game....',
+                existingPlayers: this.players
+            });
         } else if(this.game.inProgress) {
             console.log("... new player wanted to play, but game in progress")
-            socket.emit('WAIT', 'Game in progress....');
+            socket.emit('WAIT', {
+                msg: 'game in progress',
+                existingPlayers: this.players
+            });
         } else {
-            let i = Math.floor(Math.random() * this.players.length);
-            let peers = this.players.map(function (player) {
-                return player.socket.id;
-            });
-            this.players[i].socket.emit('ELECTION', {
-                peers: peers,
-                player: this.players[i]
-            });
+            this.players[0].isDealer = true;
+            this.game.start(this.players);
+            this.broadcast("START_GAME", this.players);
         }
     }
 
@@ -83,9 +84,9 @@ module.exports = class Monitor {
 
     broadcast(type, message) {
         console.log(`BROADCAST: ${type} -> ${message}`);
-        this.players.forEach(function (player) {
-            player.socket.emit(type, JSON.stringify(message));
-        });
+        for(let i=0; i<this.players.length; i++) {
+            this.players[i].socket.emit(type, JSON.stringify(message));
+        }
     }
 
     hit(data) {

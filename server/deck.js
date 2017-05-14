@@ -25,7 +25,8 @@ module.exports = class Deck {
     nextCard() {
         console.log(`... dealing the next card from ${this.next}`)
         if (this.next >= this.cards.length) {
-            this.cards = this.shuffle();
+            this.cards = [];
+            this.shuffle();
             this.next = 0;
             console.log(".... created a new deck");
         }

@@ -11,7 +11,6 @@ let currentDealerId = null;
 socket.on('NEW_PLAYER', addPlayer);
 socket.on('REMOVE_PLAYER', removePlayer);
 socket.on('START_GAME', startGame);
-socket.on('ELECTION', election);
 socket.on('WAIT', waitAndAskAgain);
 socket.on('HIT', processAction);
 socket.on('STAND', processAction);
@@ -23,15 +22,19 @@ function action(button) {
 
 function addPlayer(player) {
     console.log(`NEW_PLAYER: ${player}`);
-    new Player(JSON.parse(player), socket.id);
+    let newPlayer = new Player(JSON.parse(player), socket.id);
+    neighbours.push(newPlayer.socket.id);
 }
 
 function removePlayer(playerId) {
     console.log(`REMOVE_PLAYER: ${playerId}`);
-    let playerDiv = document.getElementById(JSON.parse(playerId))
+    let playerDiv = document.getElementById(JSON.parse(playerId));
     if (playerDiv) {
         playerDiv.remove();
     }
+    neighbours.splice(neighbours.findIndex(function (id) {
+        return id === playerId
+    }), 1);
 }
 
 function startGame(players) {
@@ -39,23 +42,31 @@ function startGame(players) {
     renderPlayers(fromJSON(players));
 }
 
-function election(data) {
-    console.log(`ELECTION: ${data}`);
-    neighbours = data.peers;
-    sendElectionMessage();
-}
-
 function renderPlayers(players) {
+    let me = null;
     document.getElementById('players').innerHTML = "";
     for (let i = 0; i < players.length; i++) {
         players[i].render();
     }
+    $(`#hit${socket.id}`).click = function (e) {
+        socket.emit('HIT', socket.id);
+    };
+    $(`#stand${socket.id}`).click = function (e) {
+        socket.emit('STAND', socket.id);
+    };
 }
 
 
 function waitAndAskAgain(data) {
     console.log("WAIT: will wait and ask again");
-    showNotification(data);
+    showNotification(data.msg);
+    // let players = fromJSON(data.exisitingPlayers);
+    // neighbours = [];
+    // for(let i=0; i<players.length; i++) {
+    //     neighbours.push(players[i].socket.id);
+    // }
+    // renderPlayers(players);
+    // showNotification(data.msg);
 }
 
 function showNotification(message) {
@@ -79,61 +90,69 @@ function processAction(player) {
 }
 
 function findPeersWithHigherIds() {
-    return neighbours.filter(function (peer) {
-        return socket.id < peer;
-    });
+    let peersWithHigherIds = [];
+    for (let i = 0; i < neighbours.length; i++) {
+        if (socket.id < neighbours[i]) {
+            peersWithHigherIds.push(neighbours[i]);
+        }
+    }
+    return peersWithHigherIds;
 }
 
 function sendElectionMessage() {
     anyBiggerNodeAlive = false;
     let peersWithHigherIds = findPeersWithHigherIds();
 
-    peersWithHigherIds.forEach((_peer) => {
-        peer.connect(_peer, function (conn) {
-            conn.send('ELECTION', peer.id);
-        });
-    });
-    setTimeout(() => {
-        if (anyBiggerNodeAlive === false) {
-            console.log(`i am the king!`.toUpperCase());
-            isDealer = true;
-            currentDealerId = socket.id;
-            neighbours.forEach((_peer) => {
-                peer.connect(_peer, function (conn) {
+    for (let i = 0; i < peersWithHigherIds.length; i++) {
+        let conn = peer.connect(peersWithHigherIds[i]);
+        console.log(`${socket.id}: Sending ELECTION -> ${peersWithHigherIds[i]}`)
+        conn.send('ELECTION', socket.id);
+    }
+
+    if (peersWithHigherIds.length > 0) {
+        setTimeout(() => {
+            if (anyBiggerNodeAlive === false) {
+                console.log(`${socket.id}: I AM THE KING! Will let the world know`);
+                isDealer = true;
+                currentDealerId = socket.id;
+                for (let i = 0; i < neighbours.length; i++) {
+                    let conn = peer.connect(neighbours[i]);
+                    console.log(`${socket.id}: Sending COORDINATOR -> ${neighbours[i]}`)
                     conn.send('COORDINATOR', socket.id);
-                });
-                socket.emit('START_GAME', socket.id);
-            });
-        }
-    }, 1000 * neighbours.length - 1);
+                }
+            } else {
+                console.log(`${socket.id}: Bigger node is still alive.... shutting my mouth`)
+            }
+        }, 1000 * neighbours.length - 1);
+    }
 }
 
 peer.on('ELECTION', function (id) {
-    console.log(`${socket.id} got ELECTION...${id}`);
-    peer.connect(id, function (conn) {
-        conn.send('ANSWER', socket.id);
-    });
+    console.log(`${socket.id}: ELECTION from ${id}, sending ANSWER`);
+    let conn = peer.connect(id);
+    conn.send('ANSWER', socket.id);
 });
 
 peer.on('ANSWER', function (id) {
-    console.log(`${socket.id} got ANSWER...${id}`);
+    console.log(`${socket.id}: ANSWER from bigger node ${id}`);
     isDealer = false;
     anyBiggerNodeAlive = true;
 });
 
 peer.on('COORDINATOR', function (id) {
-    console.log(`${socket.id} got COORDINATOR...${id}`);
-    if (data < socket.id) {
+    console.log(`${socket.id}: COORDINATOR from ${id}`);
+    if (id < socket.id) {
         if (socket.id === currentDealerId) {
-            console.log(`hey ${id}, my nodes are loyal to me!`.toUpperCase());
+            console.log(`${socket.id}: hey ${id}, my nodes are loyal to me!`.toUpperCase());
         } else {
-            console.log(`so, yeah... thats akward ${id}, I'm gonna go ahead and start a new election`.toUpperCase());
+            console.log(`${socket.id}: so, yeah... thats akward ${id}, I'm gonna go ahead and start a new election`.toUpperCase());
+            sendElectionMessage();
         }
-        sendElectionMessage();
     } else {
         currentDealerId = id;
         isDealer = false;
         anyBiggerNodeAlive = true;
-        console.log(`long live node ${id}!`.toUpperCase());
+        console.log(`${socket.id}: long live node ${id}!`.toUpperCase());
     }
 });
+
