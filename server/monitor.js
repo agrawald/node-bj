@@ -21,7 +21,8 @@ module.exports = class Monitor {
                     this.players[nextIdx].myTurn = true;
                     this.turn = this.players[nextIdx];
                 }
-                break;
+            } else {
+                player.isDealer = false;
             }
         }
         this.broadcast('UPDATE_PLAYERS', this.players);
@@ -45,12 +46,13 @@ module.exports = class Monitor {
                 existingPlayers: this.players
             });
         } else {
-            this.players[0].isDealer = true;
+            let dealerId = this.players.length -1;
+            this.players[dealerId].isDealer = true;
             this.game.start(this.players);
-            this.players[1].myTurn = true;
-            this.turn = this.players[1].socket.id;
+            this.players[0].myTurn = true;
+            this.turn = this.players[0].socket.id;
             this.broadcast("START_GAME", this.players);
-            this.broadcast("TURN", this.players[1].socket.id);
+            this.broadcast("TURN", this.players[0].socket.id);
         }
     }
 
@@ -140,13 +142,12 @@ module.exports = class Monitor {
 
     nextTurn(i) {
         let nextTurn = i + 1;
-        if (nextTurn >= this.players.length) {
-            nextTurn = 0;
-        }
         if (this.players[nextTurn].isDealer) {
             nextTurn += 1;
         }
-
+        if (nextTurn >= this.players.length) {
+            nextTurn = 0;
+        }
         return nextTurn;
     }
 
