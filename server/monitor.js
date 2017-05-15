@@ -32,7 +32,7 @@ module.exports = class Monitor {
         let player = new Player(socket);
         this.players.push(player);
 
-        if (this.players.length < 3) {
+        if (this.players.length < 5) {
             console.error("... need more players to start a game");
             socket.emit('WAIT', {
                 msg: 'Need more players to start a game....',
